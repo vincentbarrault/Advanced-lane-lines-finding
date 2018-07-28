@@ -11,22 +11,23 @@ The goals / steps of this project are the following:
 * Output visual display of the lane boundaries and numerical estimation of lane curvature and vehicle position.
 
 
-## Code
+## Code (Python)
 
 The project contains the following python files:
-* pipeline.py: Main pipeline calling the different functions processing each frame of the video.
-* video_processing.py: Process the video by sending each frame to the pipeline.
-* camera_calibration.py: Calibrate the camera, correct the distortion of the image and apply perspective transform to get a bird's eye view of the lanes.
-* threshold.py: Apply filters to create a thresholded binary image.
-* lane_finding.py: Determine lane pixels, curvature of the lane and vehicle position with respect to the center of the lanes before displaying the lane boundaries on the original image.
+* `video_processing.py`: Process the video by sending each frame to the pipeline.
+* `pipeline.py`: Main pipeline calling the different functions processing each frame of the video.
+* `camera_calibration.py`: Calibrate the camera, correct the distortion of the image and apply perspective transform to get a bird's eye view of the lanes.
+* `threshold.py`: Apply filters to create a thresholded binary image.
+* `lane_finding.py`: Determine lane pixels, curvature of the lane and vehicle position with respect to the center of the lanes before displaying the lane boundaries on the original image.
 
 The script is run by using python and providing 2 parameters:
 
       python video_processing.py project_video.mp4 project_video_output.mp4
 
-The first parameter is the path for the input video.
-The second parameter is the path where the processed video will be saved.
+ 1. First parameter: path for the input video. 
+ 2. Second parameter: path where the processed video will be saved.
 
+Here is an example of the result:
 ![](https://github.com/vincentbarrault/Advanced-lane-lines-finding/blob/master/project_video_output.gif?raw=true)
 
 In the same way, for processing a single image, run the following:
@@ -40,10 +41,11 @@ Located in `camera_calibration.py`, the script uses `cv2.findChessboardCorners` 
 The distortion coefficients are stored in a file (calibration_data.dat) using `pickle` to not recalculate them everytime the script is run.
 
 The distortion correction is then applied to the image with `cv2.undistort`:
-![](https://raw.githubusercontent.com/vincentbarrault/Advanced-lane-lines-finding/master/test_images/test3.jpg | width=100)
+![](https://raw.githubusercontent.com/vincentbarrault/Advanced-lane-lines-finding/master/test_images/test3.jpg)
 *distorded image*
 
-![](https://raw.githubusercontent.com/vincentbarrault/Advanced-lane-lines-finding/master/output_images/test3_undistorded.jpg | width=100)
+
+![](https://raw.githubusercontent.com/vincentbarrault/Advanced-lane-lines-finding/master/output_images/test3_undistorded.jpg)
 *undistorded image*
 
 ## 2. Image threshold
@@ -82,7 +84,7 @@ To isolate and filter the lanes in the picture, the R channel from the RGB pictu
 
 The threshold has been chosen after various tests and the result is as follows:
 
-![](https://raw.githubusercontent.com/vincentbarrault/Advanced-lane-lines-finding/master/output_images/test3_threshold.jpg | width=100)
+![](https://raw.githubusercontent.com/vincentbarrault/Advanced-lane-lines-finding/master/output_images/test3_threshold.jpg)
 *Thresholded binary image*
 
 ## 3. Perspective transform
@@ -119,16 +121,21 @@ To calculate the transformation matrix and its inverse, the function `cv2.getPer
 		# Return the resulting image and matrix
 		return warped, M, Minv
 
-![](https://github.com/vincentbarrault/Advanced-lane-lines-finding/blob/master/output_images/test3_birdview.jpg?raw=true| width=100)
-INCLUDE IMAGE OF BIRDS VIEW
+![](https://github.com/vincentbarrault/Advanced-lane-lines-finding/blob/master/output_images/test3_birdview.jpg?raw=true)
+*Bird's eye view of the road*
 
 ## 4. Lane finding
 
+### Histogram and sliding windows
 This part of the script calculates the histogram on the X axis to find which pixels are part of the lines and which belong to the left line and which belong to the right line.
 
 The two highest peaks from the histogram are used as a starting point for determining where the lane lines are, before sliding windows moving upward in the image (further along the road) to determine where the lane lines go.
 
+### Polynomial curve and radius
+
 After finding all pixels belonging to each line through the sliding window method, a polynomial fit is calculated (`np.polyfit`) for each lane to get their polynomial curve and then determine their radius (value displayed in the video). 
+
+### Use of weighted mean list
 
 A weighted mean list (`array_size = 8`) was also implemented to compensate lane detections (from threshold binary image) which were not good enough. It also smoothen the movement of the lines displayed on the video. Furthermore, if the left and right lines have a slope which is too different (lines not aligned), it means that the values are probably wrong. Those are excluded from the calculations. If this happens in 3 frames in a row, the weighted average list is reset to update it with values which are more actual and not display "old" lines which wouldn't fit the latest frames.
 
@@ -163,5 +170,32 @@ A weighted mean list (`array_size = 8`) was also implemented to compensate lane 
 
 The result of the lane boundaries is then warped back to return to the original view of the picture and displayed on top of the original image:
 
-![](https://github.com/vincentbarrault/Advanced-lane-lines-finding/blob/master/output_images/test3_lanefinding.jpg?raw=true | width=100)
+### Radius curvature
+
+The radius of curvature for lane lines is calculated by using the formula described [here](https://www.intmath.com/applications-differentiation/8-radius-curvature.php). After calculations, the radius of curvature is in pixel space, which is not the same as real world space. The radius values are converted to real world space by multiplying the radius (in pixel space) by "meter per pixel" factors  in x and y dimension. To find those factor, let's consider that the lane is about 30 meters long and 3.7 meters wide. Furthermore, camera image has 720 relevant pixels in the y-dimension (after image is perspective-transformed), and about 700 relevant pixels in the x-dimension: 
+```
+ym_per_pix = 30/720 # meters per pixel in y dimension
+xm_per_pix = 3.7/700 # meters per pixel in x dimension
+```
+### Vehicle position
+
+To determine the position of the vehicle with respect to lanes center, the difference between the midpoint of both lanes and the center of the image is calculated. After getting the position in pixel world, the fact the lanes are about 3.7 meters wide is used to convert it to real world space.
+
+
+![](https://github.com/vincentbarrault/Advanced-lane-lines-finding/blob/master/output_images/test3_lanefinding.jpg?raw=true)
 *Processed image after lane finding detection*
+
+## Identification of shortcomings
+
+### Handling large curves
+
+When the lanes are very curved, the current implementation of sliding window does not work because the lines arrive at the left or right edge of the image. If  `minpix`  is not achieved (i.e. the curve ran off the image), the starting position of the next window doesn't change, so it is just positioned directly above the previous window. This will repeat for however many windows are left in  `nwindows`, stacking the sliding windows vertically against the side of the image, and likely leading to an imperfect polynomial fit.
+
+### Thresholded binary image
+Other filters could be used for improving the identification of the lane marking on the road. For example, gaussian blur or applying the Sobel operator to take the derivative of the image in the x direction.
+
+### Excluding wrong values
+In the current implementation of the algorithm, the difference between the slope of 2 found lines is used to determine if those lines should be excluded (different slopes = left and right lines not aligned). This part of the program could be improved by using other ways to exclude absurd values (e.g. line curvature).
+
+### Bad lightning due to windshield
+The sunlight is reflected on the windshield and make the lane detection a lot harder. The problem is more visible on the harder challenge video in which the script does not work well at all. Placing cameras in an environment where there is no reflection (e.g. front of the car) could prevent this issue.

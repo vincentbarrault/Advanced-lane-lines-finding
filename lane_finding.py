@@ -8,10 +8,11 @@ import time
 left_fit = None
 right_fit = None
 
+# Weighted average list with a size of 8
 array_size = 8
 left_fit_list = [None] * array_size
 right_fit_list = [None] * array_size
-index = 0
+index_weighted_list = 0
 successive_error = 0
 first_frame = True
 
@@ -27,12 +28,12 @@ def find_lane_pixels(binary_warped):
     global left_fit_list
     global right_fit_list
     global array_size
-    global index
+    global index_weighted_list
 	
     # Initialize weighted mean lists
     left_fit_list = [None] * array_size
     right_fit_list = [None] * array_size
-    index = 0
+    index_weighted_list = 0
     successive_error = 0
     
 	# Take a histogram of the bottom half of the image
@@ -173,7 +174,7 @@ def fit_poly(img_shape, leftx, lefty, rightx, righty):
     global right_fit
     global left_fit_list
     global right_fit_list
-    global index
+    global index_weighted_list
     global array_size
     global successive_error
     global last_valid_fit_values
@@ -212,9 +213,9 @@ def fit_poly(img_shape, leftx, lefty, rightx, righty):
     else: # lanes found have correct values, add them to weighted average
         first_frame = False
         successive_error = 0
-        left_fit_list[index] = left_fit
-        right_fit_list[index] = right_fit
-        index = (index + 1) % array_size
+        left_fit_list[index_weighted_list] = left_fit
+        right_fit_list[index_weighted_list] = right_fit
+        index_weighted_list = (index_weighted_list + 1) % array_size
 
 
     # If weighted average list is empty, load the last valid fit values
@@ -223,8 +224,8 @@ def fit_poly(img_shape, leftx, lefty, rightx, righty):
         right_fit = last_valid_fit_values[1]
     else: #else make the average of all elements in the list
         if any(elem is None for elem in left_fit_list):
-            left_fit = sum(left_fit_list[:(index)])/(index)
-            right_fit = sum(right_fit_list[:(index)])/(index)
+            left_fit = sum(left_fit_list[:(index_weighted_list)])/(index_weighted_list)
+            right_fit = sum(right_fit_list[:(index_weighted_list)])/(index_weighted_list)
         else:
             left_fit = sum(left_fit_list)/array_size
             right_fit = sum(right_fit_list)/array_size
@@ -320,6 +321,7 @@ def check_curverad(left_curverad, right_curverad):
         print("Curve radius difference between both lanes is too high")
 
 
+# draw polynomial curve on image (not used)
 def fit_polynomial(binary_warped):
     global left_fit
     global right_fit
@@ -347,9 +349,4 @@ def fit_polynomial(binary_warped):
     out_img[righty, rightx] = [0, 0, 255]
 
     return out_img
-
-
-if __name__ == '__main__':
-
-	out_img = fit_polynomial(binary_warped)
 

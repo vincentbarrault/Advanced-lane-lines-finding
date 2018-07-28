@@ -27,8 +27,9 @@ The script is run by using python and providing 2 parameters:
 The first parameter is the path for the input video.
 The second parameter is the path where the processed video will be saved.
 
+![](https://github.com/vincentbarrault/Advanced-lane-lines-finding/blob/master/project_video_output.gif?raw=true)
+
 In the same way, for processing a single image, run the following:
-  
 
       python pipeline.py image_input.mp4 image_output.mp4
 
@@ -38,84 +39,98 @@ Located in `camera_calibration.py`, the script uses `cv2.findChessboardCorners` 
 
 The distortion coefficients are stored in a file (calibration_data.dat) using `pickle` to not recalculate them everytime the script is run.
 
-The distortion correction is then applied to the image with `cv2.undistort:`
-DISTORDED
-UNDISTORDED
+The distortion correction is then applied to the image with `cv2.undistort`:
+![](https://raw.githubusercontent.com/vincentbarrault/Advanced-lane-lines-finding/master/test_images/test3.jpg | width=100)
+*distorded image*
+
+![](https://raw.githubusercontent.com/vincentbarrault/Advanced-lane-lines-finding/master/output_images/test3_undistorded.jpg | width=100)
+*undistorded image*
 
 ## 2. Image threshold
 
 To isolate and filter the lanes in the picture, the R channel from the RGB picture and the S (saturation) channel from the HLS picture are combined together.
 
-    R = img[:,:,0]
-    G = img[:,:,1]
-    B = img[:,:,2]
+    def custom_threshold(image):
+	    img = np.copy(image)
 
-    # Isolate R channel (RGB) from the picture
-    thresh = (200, 255)
-    binary_R = np.zeros_like(R)
-    binary_R[(R > thresh[0]) & (R <= thresh[1])] = 1
-    
-    hls = cv2.cvtColor(image, cv2.COLOR_RGB2HLS)
-    H = hls[:,:,0]
-    L = hls[:,:,1]
-    S = hls[:,:,2]
-    
-    # Isolate S channel (HLS) from the picture
-    thresh = (110, 255)
-    binary_S = np.zeros_like(S)
-    binary_S[(S > thresh[0]) & (S <= thresh[1])] = 1
-    
-    # Combine both channel to identify lanes
-    color_binary = np.dstack(( np.zeros_like(binary_S), binary_S, binary_R)) * 255
-    
-    combined_binary = np.zeros_like(binary_S)
-    combined_binary[(binary_S == 1) | (binary_R == 1)] = 1
+	    R = img[:,:,0]
+	    G = img[:,:,1]
+	    B = img[:,:,2]
+
+	    # Isolate R channel (RGB) from the picture
+	    thresh = (200, 255)
+	    binary_R = np.zeros_like(R)
+	    binary_R[(R > thresh[0]) & (R <= thresh[1])] = 1
+	    
+	    hls = cv2.cvtColor(image, cv2.COLOR_RGB2HLS)
+	    H = hls[:,:,0]
+	    L = hls[:,:,1]
+	    S = hls[:,:,2]
+	    
+	    # Isolate S channel (HLS) from the picture
+	    thresh = (110, 255)
+	    binary_S = np.zeros_like(S)
+	    binary_S[(S > thresh[0]) & (S <= thresh[1])] = 1
+	    
+	    # Combine both channel to identify lanes
+	    color_binary = np.dstack(( np.zeros_like(binary_S), binary_S, binary_R)) * 255
+	    
+	    combined_binary = np.zeros_like(binary_S)
+	    combined_binary[(binary_S == 1) | (binary_R == 1)] = 1
+	    
+	    return combined_binary
 
 The threshold has been chosen after various tests and the result is as follows:
 
-IMAGE_THRESHOLD
+![](https://raw.githubusercontent.com/vincentbarrault/Advanced-lane-lines-finding/master/output_images/test3_threshold.jpg | width=100)
+*Thresholded binary image*
 
 ## 3. Perspective transform
 
-The area (source `src` and destination `dst`) on which the transformation is applied were chosen after tuning in an empirical manner the different corners of `src`.
+The area (source `src` and destination `dst`) on which the transformation is applied were chosen by tuning in an empirical manner the 4 corners of `src` in a trapezoidal shape. This will represent a rectangle when looking down on the road from above.
 
 To calculate the transformation matrix and its inverse, the function `cv2.getPerspectiveTransform` was used. Using `cv2.warpPerspective` with the transformation matrix and the image in parameters, the script returns returns a bird's eye view of the lanes.
 
-	corner_top_left = (img_undist.shape[1]/2-55, img_undist.shape[0]/1.58)
-	corner_top_right = (img_undist.shape[1]/2+55, img_undist.shape[0]/1.58)
-	corner_bottom_right = (img_undist.shape[1]-190, img_undist.shape[0])
-	corner_bottom_left = (190, img_undist.shape[0])
-	
-	# By increasing the offset, the lines are closer to each other, permetting to detect a higher curvature of the lane
-	offset = 300
+    def transform(img_undist):
 
-	# define 4 source points src = np.float32([[,],[,],[,],[,]])
-	src = np.float32([ corner_top_left, corner_top_right, corner_bottom_right, corner_bottom_left ])
+		corner_top_left = (img_undist.shape[1]/2-55, img_undist.shape[0]/1.58)
+		corner_top_right = (img_undist.shape[1]/2+55, img_undist.shape[0]/1.58)
+		corner_bottom_right = (img_undist.shape[1]-190, img_undist.shape[0])
+		corner_bottom_left = (190, img_undist.shape[0])
+		
+		# By increasing the offset, the lines are closer to each other, permetting to detect a higher curvature of the lane
+		offset = 300
 
-	# define 4 destination points dst = np.float32([[,],[,],[,],[,]])
-	dst = np.float32([[offset,0],[img_undist.shape[1]-offset,0],[img_undist.shape[1]-offset,img_undist.shape[0]],[offset,img_undist.shape[0]]]) 
+		# define 4 source points src = np.float32([[,],[,],[,],[,]])
+		src = np.float32([ corner_top_left, corner_top_right, corner_bottom_right, corner_bottom_left ])
 
-	# use cv2.getPerspectiveTransform() to get M, the transform matrix
-	M = cv2.getPerspectiveTransform(src, dst)
+		# define 4 destination points dst = np.float32([[,],[,],[,],[,]])
+		dst = np.float32([[offset,0],[img_undist.shape[1]-offset,0],[img_undist.shape[1]-offset,img_undist.shape[0]],[offset,img_undist.shape[0]]]) 
 
-	# use cv2.getPerspectiveTransform() to get Minv, the inverse of transform matrix
-	Minv = cv2.getPerspectiveTransform(dst, src)
+		# use cv2.getPerspectiveTransform() to get M, the transform matrix
+		M = cv2.getPerspectiveTransform(src, dst)
 
-	# d) use cv2.warpPerspective() to warp your image to a top-down view
-	warped = cv2.warpPerspective(img_undist, M, (img_undist.shape[1], img_undist.shape[0]), flags=cv2.INTER_LINEAR)
-	
-	# Return the resulting image and matrix
-	return warped, M, Minv
+		# use cv2.getPerspectiveTransform() to get Minv, the inverse of transform matrix
+		Minv = cv2.getPerspectiveTransform(dst, src)
 
+		# d) use cv2.warpPerspective() to warp your image to a top-down view
+		warped = cv2.warpPerspective(img_undist, M, (img_undist.shape[1], img_undist.shape[0]), flags=cv2.INTER_LINEAR)
+		
+		# Return the resulting image and matrix
+		return warped, M, Minv
+
+![](https://github.com/vincentbarrault/Advanced-lane-lines-finding/blob/master/output_images/test3_birdview.jpg?raw=true| width=100)
 INCLUDE IMAGE OF BIRDS VIEW
 
 ## 4. Lane finding
 
-This part of the script calculates the histogram on the X axis to find where are located the pixels of the lane. Then a polynomial fit is calculated (`np.polyfit`) for each lane to get their polynomial curve and determine their radius (value displayed in the video). 
+This part of the script calculates the histogram on the X axis to find which pixels are part of the lines and which belong to the left line and which belong to the right line.
 
-A weighted mean list (array size = 8) to compensate lane detections (from threshold binary image) which were not good enough. It also smoothen the movement of the lines displayed on the video.
+The two highest peaks from the histogram are used as a starting point for determining where the lane lines are, before sliding windows moving upward in the image (further along the road) to determine where the lane lines go.
 
-Furthermore, if the left and right lines have a slope which is too different (lines not aligned), it means that the values are probably wrong. Those are excluded from the calculations. If this happens in 3 frames in a row, the weighted average list is reset to update with values which are more actual and not display "old" lines which wouldn't fit the latest frames.
+After finding all pixels belonging to each line through the sliding window method, a polynomial fit is calculated (`np.polyfit`) for each lane to get their polynomial curve and then determine their radius (value displayed in the video). 
+
+A weighted mean list (`array_size = 8`) was also implemented to compensate lane detections (from threshold binary image) which were not good enough. It also smoothen the movement of the lines displayed on the video. Furthermore, if the left and right lines have a slope which is too different (lines not aligned), it means that the values are probably wrong. Those are excluded from the calculations. If this happens in 3 frames in a row, the weighted average list is reset to update it with values which are more actual and not display "old" lines which wouldn't fit the latest frames.
 
     margin = 0.45
 
@@ -148,4 +163,5 @@ Furthermore, if the left and right lines have a slope which is too different (li
 
 The result of the lane boundaries is then warped back to return to the original view of the picture and displayed on top of the original image:
 
-RESULT IMAGE
+![](https://github.com/vincentbarrault/Advanced-lane-lines-finding/blob/master/output_images/test3_lanefinding.jpg?raw=true | width=100)
+*Processed image after lane finding detection*

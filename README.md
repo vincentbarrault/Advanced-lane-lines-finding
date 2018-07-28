@@ -168,8 +168,6 @@ A weighted mean list (`array_size = 8`) was also implemented to compensate lane 
             right_fit = sum(right_fit_list)/array_size
         last_valid_fit_values = [left_fit, right_fit] # save the latest valid fit values
 
-The result of the lane boundaries is then warped back to return to the original view of the picture and displayed on top of the original image:
-
 ### Radius curvature
 
 The radius of curvature for lane lines is calculated by using the formula described [here](https://www.intmath.com/applications-differentiation/8-radius-curvature.php). After calculations, the radius of curvature is in pixel space, which is not the same as real world space. The radius values are converted to real world space by multiplying the radius (in pixel space) by "meter per pixel" factors  in x and y dimension. To find those factor, let's consider that the lane is about 30 meters long and 3.7 meters wide. Furthermore, camera image has 720 relevant pixels in the y-dimension (after image is perspective-transformed), and about 700 relevant pixels in the x-dimension: 
@@ -181,6 +179,9 @@ xm_per_pix = 3.7/700 # meters per pixel in x dimension
 
 To determine the position of the vehicle with respect to lanes center, the difference between the midpoint of both lanes and the center of the image is calculated. After getting the position in pixel world, the fact the lanes are about 3.7 meters wide is used to convert it to real world space.
 
+### Displaying lane boundaries
+
+The result of the lane boundaries is then warped back to return to the original view of the picture and displayed on top of the original image:
 
 ![](https://github.com/vincentbarrault/Advanced-lane-lines-finding/blob/master/output_images/test3_lanefinding.jpg?raw=true)
 *Processed image after lane finding detection*
